@@ -57,7 +57,7 @@ screenshot() {
 		ssh -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip` 'DISPLAY=:99 import -window root /root/yolo.png'
 		scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/root/yolo.png "$ROOT/screencaps/$NOME_CORSO-$ANNO-$id-$counter.png"
 		sleep 60
-		tempo=$(printf '(%s - 300)  - %s\n' `date -d $end '+%s'` `date '+%s'` | bc) 
+		tempo=$(printf '(%s - 300)  - %s\n' `date -d $end '+%s'` `date '+%s'` | bc)
 	done
 	rm "$ROOT/screencaps/$NOME_CORSO-$ANNO-$id-$counter.png"
 }
@@ -71,29 +71,39 @@ record_start() {
 	set +e
 	echo 'n' | ssh-keygen -N "" -q -f $PRIV_KEY
 	set -e
-	
+
     # create server with terraform
 	cd $ROOT/terraform
 	terraform init
 	terraform apply -var="anno=$ANNO" -var="corso=$NOME_CORSO" -var="id=$id" -var="counter=$counter" -state $TFSTATE -auto-approve
 	cd $ROOT
-	
+
 	make_inventory
 	wait_machines
 
 	ssh-keygen -R `retrieve_ip`
-	ansible-playbook -i $INVENTORY ${ROOT}/ansible/playbook.yml --extra-vars "link=$link pupscript=$PUPSCRIPT"
+
+	if [ -z "$TELEGRAM" ]; then TELEGRAMBOOL=no; else TELEGRAMBOOL=yes; fi;
+
+	ansible-playbook -i $INVENTORY ${ROOT}/ansible/playbook.yml --extra-vars "link=$link pupscript=$PUPSCRIPT telegram=$TELEGRAMBOOL"
 }
 
 record_stop() {
 	counter=$1
 	id=$2
-	
+
 	ssh -i $PRIV_KEY root@`retrieve_ip` 'killall -INT ffmpeg'
 	sleep 10s #in case ffmpeg needed this
 	logd Lezione finita, inizio a scaricarla
 	scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/home/yolo/reg.mkv "$ROOT/regs/$NOME_CORSO-$ANNO-${id}_$(date '+%y%m%d')_$counter.mkv"
-	logd Lezione scaricata 
+	logd Lezione scaricata
+	if [ ! -z "$TELEGRAM" ]; then
+		(
+			flock 9 # to avoid multiple use of same Telegram session from multiple IP. In sh numbers > 9 do not work
+			ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
+		) 9>telegram.session.lock
+		logd Lezione inviata su Telegram
+	fi
 	cd $ROOT/terraform
 	terraform destroy -var="anno=$ANNO" -var="corso=$NOME_CORSO" -var="id=$id" -var="counter=$counter" -state $TFSTATE -auto-approve
 	cd $ROOT
@@ -108,7 +118,7 @@ wait_and_record() {
 	id=$(echo $1 | sed 's/_\(.*\)_/\1/' | tr '_' '-'); shift
 	note=$(echo $1 | sed 's/_\(.*\)_/\1/'); shift
 	nome=$(echo $@ | sed 's/_\(.*\)_/\1/'); shift
-	
+
 	if test -z "$counter" \
 		|| test -z "$start" \
 		|| test -z "$end" \
@@ -133,7 +143,7 @@ wait_and_record() {
 	INVENTORY="${ROOT}/ansible/inventory/$NOME_CORSO-$ANNO-$id-$counter.ini"
 	TFSTATE="${ROOT}/terraform/states/$NOME_CORSO-$ANNO-$id-$counter.tfstate"
 	export ANSIBLE_HOST_KEY_CHECKING="False"
-		
+
 	seconds_till_start=$(printf '%s - (%s + 600)\n' `date -d $start '+%s'` `date '+%s'` | bc)
 	link_goodpart=$(echo $teams | grep -oE 'meetup-join[^*]+')
 	link="https://teams.microsoft.com/_\#/l/${link_goodpart}"
@@ -143,7 +153,7 @@ wait_and_record() {
 		logd skipping $nome - alredy ended
 		exit
 	fi
-	
+
 	logd waiting for $seconds_till_start secondi
 	logd per lezione: $nome - $id
 	test $seconds_till_start -gt 0 && sleep $seconds_till_start
@@ -159,7 +169,7 @@ wait_and_record() {
 	record_stop $counter $id
 
 	logd tutto finito
-	
+
 	# remove created files:
 	rm $PRIV_KEY $INVENTORY $TFSTATE
 }
@@ -186,7 +196,7 @@ destroy_all() {
 			rm $PRIV_KEY $INVENTORY
 			rm $ROOT/logs_and_pid/$NOME_CORSO-${ANNO}_${id}_$(date '+%y%m%d')_$counter.log
 			rm $PIDFILE
-		done 
+		done
 		exit
 
 }
@@ -198,8 +208,10 @@ show_help() {
 	echo "-l localhost"
 	echo "-v verboso (mantieni i log)"
 	echo "-M magistrale"
-    echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id" 
-    echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata" 
+	echo "-T [id] manda la registrazione su Telegram a questo gruppo/contatto"
+	echo "-c [curricula]"
+	echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id"
+	echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata"
 	echo "-m 'orarioInizio orarioFine URL ID' // registra manualmente da un meeting teams del giorno corrente"
 	exit
 }
@@ -207,7 +219,7 @@ show_help() {
 manual(){
     # M substitutes counter to specify that it's a manual recording
     counter="M"
-    timeStart=$1 
+    timeStart=$1
     timeEnd=$2
     url=$3
     ID=$4
@@ -228,7 +240,7 @@ manual(){
     exit
 }
 
-############### 
+###############
 # ENTRY POINT #
 ###############
 
@@ -240,16 +252,17 @@ fi
 
 TIPO_CORSO="laurea"
 
-while getopts ":hdlvMm:f:n:c:" opt; do
+while getopts ":hdlvMm:f:n:c:T:" opt; do
 	case $opt in
 		"h") show_help; exit;;
 		"d") echo "distruggi tutto" ; DESTROY=true;;
 		"l") echo "localhost" ; LOCALHOST=true;;
 		"v") echo "verboso" ; VERBOSE=true;;
 		"M") echo "magistrale"; TIPO_CORSO="magistrale";;
+		"T") echo "Telegram: $OPTARG"; TELEGRAM="$OPTARG";;
 		"f") echo "filtro corsi: $OPTARG"; FILTER_CORSO=true; FILTER_CORSO_STRING=$OPTARG;;
 		"n") echo "filtro note: $OPTARG";FILTER_NOTE=true; FILTER_NOTE_STRING=$OPTARG;;
-		"m") echo "manuale"; MANUAL=true; MANUAL_STRING=$OPTARG;; 
+		"m") echo "manuale"; MANUAL=true; MANUAL_STRING=$OPTARG;;
 		"c") echo "curricula"; CURRICULA=$OPTARG;;
 	esac
 done

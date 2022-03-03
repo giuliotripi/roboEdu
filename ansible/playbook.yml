@@ -62,6 +62,41 @@
         owner: yolo
         group: yolo
         mode: '0666'
+    - name: Upload directly to Telegram
+      block:
+        - name: Include Telegram api id and hash
+          include_vars:
+            file: ../secrets/telegram_api.yml
+        - name: Install pip3
+          apt:
+            name:
+              - python3-pip
+        - name: install python libs
+          pip:
+            name:
+              - telethon
+              - asyncio
+        - name: Upload Telegram script
+          template:
+            src: ./scripts/{{item}}
+            dest: /home/yolo/{{item}}
+            owner: yolo
+            group: yolo
+            mode: '0777'
+          loop:
+            - lezioni-carica-telegram.py
+            - send.sh
+        - name: Upload Telegram session and materie
+          copy:
+            src: ../{{ item }}
+            dest: /home/yolo/{{ item }}
+            owner: yolo
+            group: yolo
+            mode: '0777'
+          loop:
+            - anon.session
+            - materie.txt
+      when: telegram | bool
     - name: change xdg_runtime permissions
       file:
         path: /run/user/0
