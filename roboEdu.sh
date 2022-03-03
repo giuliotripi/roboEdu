@@ -180,8 +180,9 @@ show_help() {
 	echo "-l localhost"
 	echo "-v verboso (mantieni i log)"
 	echo "-M magistrale"
-    echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id" 
-    echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata" 
+	echo "-C curricola"
+    echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id"
+    echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata"
 	echo "-m 'orarioInizio orarioFine URL ID' // registra manualmente da un meeting teams del giorno corrente"
 	exit
 }
@@ -220,14 +221,16 @@ if test $# -lt 2; then
 fi
 
 TIPO_CORSO="laurea"
+CURRICOLA=""
 
-while getopts ":hdlvMm:f:n:" opt; do
+while getopts ":hdlvMm:f:n:C:" opt; do
 	case $opt in
 		"h") show_help; exit;;
 		"d") echo "distruggi tutto" ; DESTROY=true;;
 		"l") echo "localhost" ; LOCALHOST=true;;
 		"v") echo "verboso" ; VERBOSE=true;;
 		"M") echo "magistrale"; TIPO_CORSO="magistrale";;
+		"C") echo "curricola: $OPTARG"; CURRICOLA="$OPTARG";;
 		"f") echo "filtro corsi: $OPTARG"; FILTER_CORSO=true; FILTER_CORSO_STRING=$OPTARG;;
 		"n") echo "filtro note: $OPTARG";FILTER_NOTE=true; FILTER_NOTE_STRING=$OPTARG;;
 		"m") echo "manuale"; MANUAL=true; MANUAL_STRING=$OPTARG;; 
@@ -257,7 +260,7 @@ echo $$ > $ROOT/logs_and_pid/$NOME_CORSO-$ANNO.pid
 tmpdir=$(mktemp -d)
 exec 3> $tmpdir/fd3
 
-curl -s "https://corsi.unibo.it/$TIPO_CORSO/$NOME_CORSO/orario-lezioni/@@orario_reale_json?anno=$ANNO&curricula=&start=$oggi&end=$oggi" | jq -r '.[] | .start + " " + .end + " " + .teams + " " + .cod_modulo + " _" + .note + "_ " + .title' > $tmpdir/fd3
+curl -s "https://corsi.unibo.it/$TIPO_CORSO/$NOME_CORSO/orario-lezioni/@@orario_reale_json?anno=$ANNO&curricula=$CURRICOLA&start=$oggi&end=$oggi" | jq -r '.[] | .start + " " + .end + " " + .teams + " " + .cod_modulo + " _" + .note + "_ " + .title' > $tmpdir/fd3
 
 while read line; do
 	ID=$(echo $line | cut -d' ' -f4)
