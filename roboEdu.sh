@@ -73,7 +73,10 @@ record_start() {
 	wait_machines
 
 	ssh-keygen -R `retrieve_ip`
-	ansible-playbook -i $INVENTORY ${ROOT}/ansible/playbook.yml --extra-vars "link=$link pupscript=$PUPSCRIPT"
+
+	if [ -z "$TELEGRAM" ]; then TELEGRAMBOOL=no; else TELEGRAMBOOL=yes; fi;
+
+	ansible-playbook -i $INVENTORY ${ROOT}/ansible/playbook.yml --extra-vars "link=$link pupscript=$PUPSCRIPT telegram=$TELEGRAMBOOL"
 }
 
 record_stop() {
@@ -84,7 +87,11 @@ record_stop() {
 	sleep 10s #in case ffmpeg needed this
 	logd Lezione finita, inizio a scaricarla
 	scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/home/yolo/reg.mkv "$ROOT/regs/$NOME_CORSO-$ANNO-${id}_$(date '+%y%m%d')_$counter.mkv"
-	logd Lezione scaricata 
+	logd Lezione scaricata
+	if [ ! -z "$TELEGRAM" ]; then
+    ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
+	  logd Lezione inviata su Telegram
+	fi
 	cd terraform
 	terraform destroy -var="anno=$ANNO" -var="corso=$NOME_CORSO" -var="id=$id" -var="counter=$counter" -state $TFSTATE -auto-approve
 	cd $ROOT
@@ -181,6 +188,7 @@ show_help() {
 	echo "-v verboso (mantieni i log)"
 	echo "-M magistrale"
 	echo "-C curricola"
+	echo "-T [id] manda la registrazione su Telegram a questo gruppo/contatto"
     echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id"
     echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata"
 	echo "-m 'orarioInizio orarioFine URL ID' // registra manualmente da un meeting teams del giorno corrente"
@@ -223,7 +231,7 @@ fi
 TIPO_CORSO="laurea"
 CURRICOLA=""
 
-while getopts ":hdlvMm:f:n:C:" opt; do
+while getopts ":hdlvMm:f:n:C:T:" opt; do
 	case $opt in
 		"h") show_help; exit;;
 		"d") echo "distruggi tutto" ; DESTROY=true;;
@@ -231,6 +239,7 @@ while getopts ":hdlvMm:f:n:C:" opt; do
 		"v") echo "verboso" ; VERBOSE=true;;
 		"M") echo "magistrale"; TIPO_CORSO="magistrale";;
 		"C") echo "curricola: $OPTARG"; CURRICOLA="$OPTARG";;
+		"T") echo "Telegram: $OPTARG"; TELEGRAM="$OPTARG";;
 		"f") echo "filtro corsi: $OPTARG"; FILTER_CORSO=true; FILTER_CORSO_STRING=$OPTARG;;
 		"n") echo "filtro note: $OPTARG";FILTER_NOTE=true; FILTER_NOTE_STRING=$OPTARG;;
 		"m") echo "manuale"; MANUAL=true; MANUAL_STRING=$OPTARG;; 
