@@ -95,8 +95,11 @@ record_stop() {
 	scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/home/yolo/reg.mkv "$ROOT/regs/$NOME_CORSO-$ANNO-${id}_$(date '+%y%m%d')_$counter.mkv"
 	logd Lezione scaricata
 	if [ ! -z "$TELEGRAM" ]; then
-    ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
-	  logd Lezione inviata su Telegram
+		(
+			flock 200 # to avoid multiple use of same Telegram session from multiple IP
+			ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
+		) 200>telegram.session.lock
+		logd Lezione inviata su Telegram
 	fi
 	cd terraform
 	terraform destroy -var="anno=$ANNO" -var="corso=$NOME_CORSO" -var="id=$id" -var="counter=$counter" -state $TFSTATE -auto-approve
@@ -203,8 +206,9 @@ show_help() {
 	echo "-v verboso (mantieni i log)"
 	echo "-M magistrale"
 	echo "-T [id] manda la registrazione su Telegram a questo gruppo/contatto"
-    echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id"
-    echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata"
+	echo "-c [curricula]"
+	echo "-f filtro [id] // questo è un filtro positivo, registrerà solamente le lezioni con questo id"
+	echo "-n filtro [nota] // questo è un filtro negativo, salterà le lezioni con la nota specificata"
 	echo "-m 'orarioInizio orarioFine URL ID' // registra manualmente da un meeting teams del giorno corrente"
 	exit
 }

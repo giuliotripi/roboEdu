@@ -30,6 +30,7 @@ nella cartella `regs/`.
 - terraform
 - ansible >= 2.8.0 (versioni precedenti potrebbero non riconoscere
 correttamente la versione di Python usata)
+- telethon (se si desidera l'integrazione con Telegram)
 
 ## Come far partire le registrazioni
 - crea `secrets/unibo_login.yml` con variabili `username`, `password`, ad
@@ -53,4 +54,28 @@ mkdir -p /var/log/roboEdu/
 /path/to/roboEdu.sh <nomecorso> <anno> >> /var/log/roboEdu/<nomecorso>-<anno>-$(date '+%y%m%d').log 2>&1
 ```
 
+## Come inviare le registrazioni su Telegram
 
+- Vai su [my.telegram.org](https://my.telegram.org), accedi con il tuo account Telegram, entra nella
+sezione `API development tools` e crea una App. Una volta creata, copia `api_id` e `api_hash` e copiali in
+`secrets/telegram_api.yml`, ad esempio:
+```yaml
+api_id: 123456
+api_hash: 'qwertyuiopasdfghjklzxcvbnm'
+```
+- [Facoltativo] Inserisci in [ansible/scripts/materie.txt](ansible/scripts/materie.txt) l'elenco delle materie registrate,
+in modo da inserire un tag nella descrizione dei messaggi inviati su Telegram.
+Essendo tag, i nomi devono essere senza spazi. ad esempio:
+```text
+12355: SistemiOperativiM
+12300-1: InternetOfThings1
+12300-2: InternetOfThings2
+```
+- Esegui `python3 utils.py` sul computer in modo da generare la sessione necessaria per accedere
+automaticamente a Telegram
+- Ottieni l'ID del gruppo/contatto a cui inviare eseguendo `python3 utils.py <filtro>` dove <filtro>
+è il nome del contatto da cercare. Ad esempio, per cercare il canale _Registrazioni ing info_ esegui
+`python3 utils.py ing info` o simili. NB: il contatto/canale/gruppo **deve** essere già nella
+tua lista dei contatti.
+- Aggiungi allo script il parametro `-T` con di seguito l'ID del destinatario al quale inviare a registrazione
+  (può essere anche il tuo stesso id)
