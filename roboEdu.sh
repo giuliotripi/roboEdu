@@ -89,7 +89,10 @@ record_stop() {
 	scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/home/yolo/reg.mkv "$ROOT/regs/$NOME_CORSO-$ANNO-${id}_$(date '+%y%m%d')_$counter.mkv"
 	logd Lezione scaricata
 	if [ ! -z "$TELEGRAM" ]; then
+	  (
+	  flock 200 # to avoid multiple use of same Telegram session from multiple IP
     ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
+    ) 200>telegram.session.lock
 	  logd Lezione inviata su Telegram
 	fi
 	cd terraform

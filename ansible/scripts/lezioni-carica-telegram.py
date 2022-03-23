@@ -11,18 +11,13 @@ logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s'
 					level=logging.INFO)
 
 # Use your own values from my.telegram.org
-api_id = 00000
-api_hash = 'XXXXXX'
+api_id = int('{{ api_id }}')
+api_hash = '{{ api_hash }}'
 
 client = TelegramClient('anon', api_id, api_hash)
 
-if len(sys.argv) == 2 and sys.argv[1] == "login":
-	client.start()
-	sys.exit(0)
-
 if len(sys.argv) < 6:
 	print("Usage: %s filename destinatario corso anno codiceMateria [durata] [thumb]" % sys.argv[0])
-	print("Usage: %s login" % sys.argv[0])
 	sys.exit(1)
 
 file = sys.argv[1]
@@ -41,15 +36,15 @@ if len(sys.argv) == 8:
 async def send():
 	try:
 		f = open("materie.txt", "r")
-		materie = {value: key for value, key in map(lambda i: i.strip("\n").split(": "), f.readlines())}
-		materia = materie[codiceMateria]
+		materie = {key: value for key, value in map(lambda i: i.strip("\n").split(": "), f.readlines())}
+		materia = "#" + materie[codiceMateria]
 	except (KeyError, FileNotFoundError):
-		materia = "altro"
+		materia = ""
 
 	inviato = False
 	while not inviato:
 		try:
-			info = "#" + materia + " " + corso + " " + anno + " (" + codiceMateria + ")"
+			info = materia + " " + corso + " " + anno + " (" + codiceMateria + ")"
 			if sendAsFile:
 				await client.send_file(destinatario, file, caption=info, force_document=True,
 									   attributes=[DocumentAttributeFilename("registrazione.mkv")])
