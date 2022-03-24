@@ -122,7 +122,7 @@ wait_and_record() {
 		logd skipped corso $id - corso not in $FILTER_CORSO_STRING
 		exit
 	fi
-	if test -n "$FILTER_NOTE" -a $note = "${FILTER_NOTE_STRING}"; then
+	if test -n "$FILTER_NOTE" -a "$note" = "${FILTER_NOTE_STRING}"; then
 		logd skipped note $FILTER_NOTE_STRING
 		exit
 	fi
@@ -283,6 +283,7 @@ curl -s "https://corsi.unibo.it/$TIPO_CORSO/$NOME_CORSO/orario-lezioni/@@orario_
 
 while test $counter -gt 0; do
 	set +e
+	PIDFILE=`get_pidfile`
 	wait $(cat $PIDFILE)
 	set -e
 	echo $NOME_CORSO-$ANNO-$counter ha finito
