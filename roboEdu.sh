@@ -83,7 +83,11 @@ record_start() {
 
 	ssh-keygen -R `retrieve_ip`
 
-	if [ -z "$TELEGRAM" ]; then TELEGRAMBOOL=no; else TELEGRAMBOOL=yes; fi;
+	if test -z "$TELEGRAM";then
+		TELEGRAMBOOL=no;
+	else
+		TELEGRAMBOOL=yes;
+	fi;
 
 	ansible-playbook -i $INVENTORY ${ROOT}/ansible/playbook.yml --extra-vars "link=$link pupscript=$PUPSCRIPT telegram=$TELEGRAMBOOL"
 }
@@ -97,7 +101,7 @@ record_stop() {
 	logd Lezione finita, inizio a scaricarla
 	scp -i $PRIV_KEY -o StrictHostKeyChecking=no root@`retrieve_ip`:/home/yolo/reg.mkv "$ROOT/regs/$NOME_CORSO-$ANNO-${id}_$(date '+%y%m%d')_$counter.mkv"
 	logd Lezione scaricata
-	if [ ! -z "$TELEGRAM" ]; then
+	if test "$TELEGRAM" ; then
 		(
 			flock 9 # to avoid multiple use of same Telegram session from multiple IP. In sh numbers > 9 do not work
 			ssh -i $PRIV_KEY root@`retrieve_ip` "cd /home/yolo; /home/yolo/send.sh \"$TELEGRAM\" \"$NOME_CORSO\" \"$ANNO\" \"${id}\""
